@@ -31,7 +31,7 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background-color: var(--color-lirio-aurora); /* Rosa em todas as seções */
+  background-color: var(--color-lirio-peach); /* Rosa mais escuro em todas as seções */
   color: var(--color-lirio-text);
   transition: background-color 0.5s ease, color 0.5s ease;
 }
