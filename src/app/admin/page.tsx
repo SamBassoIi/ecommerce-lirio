@@ -22,18 +22,19 @@ export default function AdminStockPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [produtos, setProdutos] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   
   // Modal de Criação e Estados do Form
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [existingImageUrl, setExistingImageUrl] = useState<string>("");
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     nome: "",
     preco: "",
     qtd: "1",
-    categoria: "Geral",
+    categoria: "Conjuntos",
     material: "Dourado"
   });
 
@@ -58,17 +59,25 @@ export default function AdminStockPage() {
       categoria: produto.categoria || "Geral",
       material: produto.material || "Dourado",
     });
-    setExistingImageUrl(produto.imagens && produto.imagens.length > 0 ? produto.imagens[0] : "");
-    setImageFile(null);
+    setExistingImageUrls(produto.imagens && produto.imagens.length > 0 ? [...produto.imagens] : []);
+    setImageFiles([]);
     setIsModalOpen(true);
   };
 
   const openCreateModal = () => {
     setEditingId(null);
-    setFormData({ nome: "", preco: "", qtd: "1", categoria: "Geral", material: "Dourado" });
-    setExistingImageUrl("");
-    setImageFile(null);
+    setFormData({ nome: "", preco: "", qtd: "1", categoria: "Conjuntos", material: "Dourado" });
+    setExistingImageUrls([]);
+    setImageFiles([]);
     setIsModalOpen(true);
+  };
+
+  const removeExistingImage = (index: number) => {
+    setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeNewImage = (index: number) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const fetchEstoque = async () => {
@@ -102,39 +111,40 @@ export default function AdminStockPage() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Na criação precisa de foto. Na edição, usa a foto antiga se imageFile for nulo.
-    if (!formData.nome || !formData.preco || (!imageFile && !editingId)) return;
+    const totalImages = existingImageUrls.length + imageFiles.length;
+    if (!formData.nome || !formData.preco || (totalImages === 0 && !editingId)) return;
 
     setIsSaving(true);
 
     try {
-      let finalImageUrl = existingImageUrl;
-
-      // 1. Fazer Upload de Nova Imagem se selecionada
-      if (imageFile) {
-        const storageRef = ref(storage, 'produtos/' + Date.now() + '_' + imageFile.name);
-        await uploadBytes(storageRef, imageFile);
-        finalImageUrl = await getDownloadURL(storageRef);
+      // 1. Upload de todas as novas imagens
+      const newUrls: string[] = [];
+      for (const file of imageFiles) {
+        const storageRef = ref(storage, 'produtos/' + Date.now() + '_' + file.name);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        newUrls.push(url);
       }
 
-      // 2. Payload Final
+      // 2. Combinar existentes + novas
+      const allImages = [...existingImageUrls, ...newUrls];
+
+      // 3. Payload Final
       const payloadProduto = {
         nome: formData.nome,
         preco: Number(formData.preco),
         qtd: parseInt(formData.qtd) || 1,
         categoria: formData.categoria,
         material: formData.material,
-        imagens: [finalImageUrl]
+        imagens: allImages.length > 0 ? allImages : existingImageUrls,
       };
 
-      // 3. Update ou Insert logico global
       if (editingId) {
         await updateDoc(doc(db, "produtos", editingId), payloadProduto);
       } else {
         await addDoc(collection(db, "produtos"), payloadProduto);
       }
       
-      // Fechando modal dinâmico e carregando tabela
       setIsModalOpen(false);
       setIsLoading(true);
       await fetchEstoque();
@@ -159,98 +169,164 @@ export default function AdminStockPage() {
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-serif text-brand-charcoal dark:text-brand-white mb-1">Estoque de Joias</h1>
-          <p className="text-text-muted text-sm">Gerencie suas listagens ativas no e-commerce.</p>
+          <p className="text-text-muted text-sm">{produtos.length} peças cadastradas</p>
         </div>
-        <button 
-          onClick={openCreateModal}
-          className="bg-brand-rose text-white px-6 py-2.5 rounded-xl font-medium shadow-sm hover:bg-opacity-90 transition-opacity flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Nova Joia
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className="pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-brand-charcoal dark:text-brand-white focus:outline-none focus:ring-2 focus:ring-brand-rose w-44" />
+          </div>
+          <button 
+            onClick={openCreateModal}
+            className="bg-brand-rose text-white px-5 py-2.5 rounded-xl font-medium shadow-sm hover:bg-opacity-90 transition-opacity flex items-center justify-center gap-2 text-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Nova Joia
+          </button>
+        </div>
       </div>
 
-      {/* Table Container */}
-      <div className="bg-white dark:bg-[#1A1A1A] rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wider text-text-muted dark:text-gray-400">
-                <th className="px-6 py-4 font-semibold">Imagem</th>
-                <th className="px-6 py-4 font-semibold">Nome</th>
-                <th className="px-6 py-4 font-semibold">Categoria</th>
-                <th className="px-6 py-4 font-semibold">Material</th>
-                <th className="px-6 py-4 font-semibold">Estoque</th>
-                <th className="px-6 py-4 font-semibold">Preço</th>
-                <th className="px-6 py-4 font-semibold text-right">Ações</th>
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {(() => {
+          const filtered = produtos.filter((p) => {
+            const q = searchTerm.toLowerCase();
+            return !q || p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q) || p.material.toLowerCase().includes(q);
+          });
+          return filtered.length === 0 ? (
+          <div className="bg-white dark:bg-[#1A1A1A] rounded-xl border border-gray-100 dark:border-gray-800 p-8 text-center text-text-muted">
+            Nenhuma joia cadastrada.
+          </div>
+          ) : (
+            filtered.map((produto) => (
+            <div key={produto.id} className="bg-white dark:bg-[#1A1A1A] rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-brand-white dark:bg-gray-800 shrink-0">
+                  <Image
+                    src={produto.imagens && produto.imagens.length > 0 ? produto.imagens[0] : "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=200&auto=format&fit=crop"}
+                    alt={produto.nome || "Joia"}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-brand-charcoal dark:text-brand-white font-medium text-sm truncate">{produto.nome || "Sem título"}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">{produto.categoria || "Geral"}</span>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <span className={`w-1.5 h-1.5 rounded-full ${produto.material === 'Dourado' ? 'bg-gold' : 'bg-silver'}`}></span>
+                      {produto.material || "-"}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => openEditModal(produto)} className="text-gray-400 hover:text-brand-rose transition-colors p-1.5" title="Editar">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
+                  </button>
+                  <button onClick={() => handleDeleteProduct(produto.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1.5" title="Excluir">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50 dark:border-gray-800">
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${(produto.qtd ?? 0) > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400'}`}>
+                  {produto.qtd ?? 0} un
+                </span>
+                <p className="text-sm font-semibold text-brand-charcoal dark:text-brand-white">
+                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(produto.preco || 0)}
+                </p>
+              </div>
+            </div>
+          ))
+          );
+        })()}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white dark:bg-[#1A1A1A] rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 text-xs uppercase tracking-wider text-text-muted dark:text-gray-400">
+              <th className="px-6 py-4 font-semibold">Imagem</th>
+              <th className="px-6 py-4 font-semibold">Nome</th>
+              <th className="px-6 py-4 font-semibold">Categoria</th>
+              <th className="px-6 py-4 font-semibold">Material</th>
+              <th className="px-6 py-4 font-semibold">Estoque</th>
+              <th className="px-6 py-4 font-semibold">Preço</th>
+              <th className="px-6 py-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+            {(() => {
+              const filtered = produtos.filter((p) => {
+                const q = searchTerm.toLowerCase();
+                return !q || p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q) || p.material.toLowerCase().includes(q);
+              });
+              return filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-12 text-center text-text-muted">
+                  Nenhuma joia cadastrada.
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-              {produtos.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-text-muted">
-                    Nenhuma joia cadastrada.
+              ) : (
+                filtered.map((produto) => (
+                <tr key={produto.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-brand-white dark:bg-gray-800">
+                      <Image
+                        src={produto.imagens && produto.imagens.length > 0 ? produto.imagens[0] : "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=200&auto=format&fit=crop"}
+                        alt={produto.nome || "Joia"}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-brand-charcoal dark:text-brand-white font-medium text-sm">{produto.nome || "Sem título"}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full font-medium">
+                      {produto.categoria || "Geral"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                      <span className={`w-2 h-2 rounded-full ${produto.material === 'Dourado' ? 'bg-gold' : 'bg-silver'}`}></span>
+                      {produto.material || "-"}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${(produto.qtd ?? 0) > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400'}`}>
+                      {produto.qtd ?? 0} un
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-sm font-semibold text-brand-charcoal dark:text-brand-white">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(produto.preco || 0)}
+                    </p>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      <button onClick={() => openEditModal(produto)} className="text-gray-400 hover:text-brand-rose transition-colors p-1" title="Editar">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                        </svg>
+                      </button>
+                      <button onClick={() => handleDeleteProduct(produto.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Excluir">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                produtos.map((produto) => (
-                  <tr key={produto.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-brand-white dark:bg-gray-800">
-                        <Image 
-                          src={produto.imagens && produto.imagens.length > 0 ? produto.imagens[0] : "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=200&auto=format&fit=crop"} 
-                          alt={produto.nome || "Joia"} 
-                          fill 
-                          className="object-cover" 
-                        />
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-brand-charcoal dark:text-brand-white font-medium text-sm">{produto.nome || "Sem título"}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full font-medium">
-                        {produto.categoria || "Geral"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                        <span className={`w-2 h-2 rounded-full ${produto.material === 'Dourado' ? 'bg-gold' : 'bg-silver'}`}></span>
-                        {produto.material || "-"}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${(produto.qtd ?? 0) > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400'}`}>
-                        {produto.qtd ?? 0} un
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-semibold text-brand-charcoal dark:text-brand-white">
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(produto.preco || 0)}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <button onClick={() => openEditModal(produto)} className="text-gray-400 hover:text-brand-rose transition-colors p-1" title="Editar">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-                          </svg>
-                        </button>
-                        <button onClick={() => handleDeleteProduct(produto.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Excluir">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+              );
+            })()}
+          </tbody>
+        </table>
       </div>
 
       {/* Modal de Criação */}
@@ -273,34 +349,43 @@ export default function AdminStockPage() {
                 />
               </div>
 
-              {/* Arquivo de Imagem */}
+              {/* Fotos do Produto */}
               <div>
-                <label className="block text-sm font-medium text-brand-charcoal dark:text-gray-200 mb-1">Foto Principal da Joia</label>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setImageFile(e.target.files[0]);
-                        }
-                      }}
-                      className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-50 dark:file:bg-gray-800 file:text-brand-rose hover:file:bg-gray-100 dark:hover:file:bg-gray-700 transition-colors cursor-pointer"
-                      required={!editingId}
-                    />
+                <label className="block text-sm font-medium text-brand-charcoal dark:text-gray-200 mb-2">Fotos da Joia <span className="text-xs text-gray-400 font-normal">(múltiplos ângulos)</span></label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setImageFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                  }}
+                  className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-50 dark:file:bg-gray-800 file:text-brand-rose hover:file:bg-gray-100 dark:hover:file:bg-gray-700 transition-colors cursor-pointer mb-3"
+                />
+                {/* Grid de previews */}
+                {(existingImageUrls.length > 0 || imageFiles.length > 0) && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {existingImageUrls.map((url, i) => (
+                      <div key={`existing-${i}`} className="relative group">
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                          <Image src={url} alt={`Foto ${i + 1}`} fill className="object-cover" />
+                        </div>
+                        <button type="button" onClick={() => removeExistingImage(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow" title="Remover">×</button>
+                        {i === 0 && <span className="absolute bottom-1 left-1 text-[8px] bg-brand-rose text-white px-1.5 py-0.5 rounded font-bold">CAPA</span>}
+                      </div>
+                    ))}
+                    {imageFiles.map((file, i) => (
+                      <div key={`new-${i}`} className="relative group">
+                        <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-dashed border-brand-rose/40">
+                          <Image src={URL.createObjectURL(file)} alt={`Nova ${i + 1}`} fill className="object-cover" />
+                        </div>
+                        <button type="button" onClick={() => removeNewImage(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow" title="Remover">×</button>
+                        {existingImageUrls.length === 0 && i === 0 && <span className="absolute bottom-1 left-1 text-[8px] bg-brand-rose text-white px-1.5 py-0.5 rounded font-bold">CAPA</span>}
+                      </div>
+                    ))}
                   </div>
-                  {(imageFile || existingImageUrl) && (
-                    <div className="shrink-0 relative w-12 h-12 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm cursor-pointer" title={imageFile ? imageFile.name : "Imagem atual"}>
-                      <Image 
-                        src={imageFile ? URL.createObjectURL(imageFile) : existingImageUrl} 
-                        alt="Preview" 
-                        fill 
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Preço, Qtd e Material */}
@@ -355,7 +440,7 @@ export default function AdminStockPage() {
                   <option value="Brinco">Brinco</option>
                   <option value="Anel">Anel</option>
                   <option value="Pulseira">Pulseira</option>
-                  <option value="Geral">Geral</option>
+                  <option value="Conjuntos">Conjuntos</option>
                 </select>
               </div>
 

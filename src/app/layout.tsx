@@ -22,9 +22,13 @@ const alexBrush = Alex_Brush({
 });
 
 export const metadata: Metadata = {
-  title: "Lírio Branco | E-commerce & Brand Dashboard",
+  title: "Lírio Branco",
   description:
     "Joias projetadas para celebrar a sua essência e os momentos simples. A poesia que você veste.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

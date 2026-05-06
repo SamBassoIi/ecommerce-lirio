@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCartStore } from "@/store/useCartStore";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +29,21 @@ export default function Home() {
   const [busca, setBusca] = useState("");
   const [filtroMaterial, setFiltroMaterial] = useState("Todos");
   const [filtroCategoria, setFiltroCategoria] = useState("Todas");
+  const [instaPosts, setInstaPosts] = useState<{ id: string; url: string }[]>([]);
+
+  // Busca posts do Instagram
+  useEffect(() => {
+    async function fetchInstaPosts() {
+      try {
+        const q = query(collection(db, "instagram_posts"), orderBy("createdAt", "desc"), limit(6));
+        const snap = await getDocs(q);
+        const lista: { id: string; url: string }[] = [];
+        snap.forEach((d) => lista.push({ id: d.id, url: d.data().url }));
+        setInstaPosts(lista);
+      } catch { /* silencioso */ }
+    }
+    fetchInstaPosts();
+  }, []);
 
   // Busca produtos do Firestore
   useEffect(() => {
@@ -69,19 +84,22 @@ export default function Home() {
   // Materiais fixos (Dourado e Prata são os únicos no negócio)
   const materiaisDisponiveis = ["Todos", "Dourado", "Prata"];
 
-  // Filtragem combinada
+  const CATEGORY_ORDER: Record<string, number> = { Conjuntos: 0, Colar: 1, Pulseira: 2, Brinco: 3, Anel: 4 };
+
   const produtosFiltrados = useMemo(() => {
-    return products.filter((p) => {
-      const matchBusca =
-        p.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        p.categoria.toLowerCase().includes(busca.toLowerCase()) ||
-        p.material.toLowerCase().includes(busca.toLowerCase());
-      const matchMaterial =
-        filtroMaterial === "Todos" || p.material === filtroMaterial;
-      const matchCategoria =
-        filtroCategoria === "Todas" || p.categoria === filtroCategoria;
-      return matchBusca && matchMaterial && matchCategoria;
-    });
+    return products
+      .filter((p) => {
+        const matchBusca =
+          p.nome.toLowerCase().includes(busca.toLowerCase()) ||
+          p.categoria.toLowerCase().includes(busca.toLowerCase()) ||
+          p.material.toLowerCase().includes(busca.toLowerCase());
+        const matchMaterial =
+          filtroMaterial === "Todos" || p.material === filtroMaterial;
+        const matchCategoria =
+          filtroCategoria === "Todas" || p.categoria === filtroCategoria;
+        return matchBusca && matchMaterial && matchCategoria;
+      })
+      .sort((a, b) => (CATEGORY_ORDER[a.categoria] ?? 99) - (CATEGORY_ORDER[b.categoria] ?? 99));
   }, [products, busca, filtroMaterial, filtroCategoria]);
 
   const formattedPrice = (value: number) =>
@@ -172,7 +190,7 @@ export default function Home() {
             className="font-sans text-sm font-light text-lirio-text/80 leading-relaxed max-w-xl mx-auto mb-10"
           >
             Nascida das palavras não ditas, a Lírio Branco transforma poesia em
-            matéria. Explore nosso catálogo e encontre a joia que traduz a sua
+            acessórios. Explore nosso catálogo e encontre a joia que traduz a sua
             essência.
           </motion.p>
 
@@ -326,7 +344,6 @@ export default function Home() {
                       href={`/produto/${product.id}`}
                       className="flex flex-col flex-grow"
                     >
-                      {/* Imagem */}
                       <div className="relative aspect-[3/4] md:h-72 md:aspect-auto rounded-xl md:rounded-3xl overflow-hidden mb-3 md:mb-6 bg-white/40">
                         <Image
                           src={product.imagem}
@@ -335,19 +352,13 @@ export default function Home() {
                           className="object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
                           sizes="33vw"
                         />
-
-                        {/* Badge Material */}
                         <div
                           className="absolute top-2 left-2 md:top-4 md:left-4 px-2 py-0.5 md:px-3 md:py-1 rounded-full text-white text-[8px] md:text-[10px] font-sans font-bold tracking-widest uppercase backdrop-blur-sm shadow-sm"
                           style={{ backgroundColor: materialColor }}
                         >
                           {product.material}
                         </div>
-
-                        {/* Favorito removido */}
                       </div>
-
-                      {/* Info */}
                       <div className="px-1 pb-2 md:px-4 md:pb-4 text-center flex-grow flex flex-col justify-between">
                         <div>
                           <span
@@ -365,8 +376,6 @@ export default function Home() {
                         </p>
                       </div>
                     </Link>
-
-                    {/* Botão Adicionar */}
                     <AddToCartButton product={product} />
                   </motion.div>
                 );
@@ -375,6 +384,33 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* ── INSTAGRAM FEED ─────────────────────────────────────────────── */}
+      {instaPosts.length > 0 && (
+        <section className="mt-20">
+          <div className="flex flex-col items-center mb-10">
+            <h2 className="font-cursive text-4xl md:text-5xl text-lirio-text mb-2">Novidades</h2>
+            <p className="font-sans text-sm font-light text-lirio-text/70">Acompanhe as redes da Sophia Anjos</p>
+            <div className="w-16 h-px bg-lirio-text/20 mt-4" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {instaPosts.map((post) => {
+              const match = post.url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+              if (!match) return null;
+              return (
+                <div key={post.id} className="glass-card rounded-2xl overflow-hidden">
+                  <iframe
+                    src={`https://www.instagram.com/p/${match[1]}/embed`}
+                    className="w-full h-[480px] border-0"
+                    loading="lazy"
+                    title={`Post ${match[1]}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="mt-20 pt-16 px-6 pb-12 glass-panel rounded-t-[3rem] border-b-0 border-x-0 relative z-10 max-w-6xl mx-auto">

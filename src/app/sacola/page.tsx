@@ -76,7 +76,7 @@ export default function SacolaPage() {
         .join("\n");
 
       const mensagem = encodeURIComponent(
-        `Olá! Sou ${nomeCliente} 🌸\n\nGostaria de finalizar meu pedido:\n\n${itensTexto}\n\nAguardo retorno! 💛`
+        `Ol\u00e1! Sou ${nomeCliente}.\n\nGostaria de finalizar meu pedido:\n\n${itensTexto}\n\nAguardo retorno!`
       );
 
       clearCart();
