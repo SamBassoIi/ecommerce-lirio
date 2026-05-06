@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import html2canvas from "html2canvas";
 
 interface Produto {
   id: string;
@@ -65,6 +66,20 @@ export default function PedidosPage() {
   const reciboRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
+
+  const downloadReceipt = async () => {
+    if (!reciboRef.current || !reciboData) return;
+    try {
+      const canvas = await html2canvas(reciboRef.current, { scale: 2 });
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `recibo-${reciboData.clienteNome.replace(/\s+/g, "_")}-${reciboData.id.slice(0, 5)}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Erro ao gerar imagem do recibo:", error);
+    }
+  };
 
   const startListeners = useCallback(() => {
     const unsubs: (() => void)[] = [];
@@ -357,9 +372,14 @@ export default function PedidosPage() {
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl relative overflow-hidden">
             <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-gray-100">
               <h3 className="font-serif text-lg text-brand-charcoal">Recibo</h3>
-              <button onClick={() => setReciboData(null)} className="text-gray-400 hover:text-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={downloadReceipt} className="text-brand-rose hover:opacity-80 transition-opacity" title="Baixar PNG">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                </button>
+                <button onClick={() => setReciboData(null)} className="text-gray-400 hover:text-gray-600" title="Fechar">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
             </div>
             <div ref={reciboRef} className="p-6 bg-white">
               <div className="text-center mb-5">
