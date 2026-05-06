@@ -20,7 +20,7 @@ export function Header() {
     const handleScroll = () => {
       const y = window.scrollY;
       setScrolled(y > 50);
-      setLogoVisible(y > 500);
+      setLogoVisible(y > 100);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     
@@ -57,7 +57,7 @@ export function Header() {
   return (
     <header
       className={`fixed top-0 w-full p-6 flex justify-between items-center z-50 transition-all duration-300 ${
-        scrolled ? "bg-white/70 dark:bg-black/70 backdrop-blur-xl shadow-sm" : ""
+        scrolled ? "bg-white/10 backdrop-blur-md shadow-sm" : ""
       }`}
     >
       {/* Logo Cursiva */}

@@ -41,11 +41,9 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${cormorant.variable} ${montserrat.variable} ${alexBrush.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-transparent overflow-x-hidden">
-        {/* Background CSS gradient animado */}
-        <div className="shader-bg" />
+      <body className="min-h-full flex flex-col font-sans bg-lirio-peach dark:bg-lirio-aurora overflow-x-hidden">
         <Header />
-        <main className="flex-grow">{children}</main>
+        <main className="flex-grow w-full overflow-hidden relative">{children}</main>
       </body>
     </html>
   );
