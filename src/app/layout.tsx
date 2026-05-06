@@ -41,7 +41,7 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${cormorant.variable} ${montserrat.variable} ${alexBrush.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-lirio-peach dark:bg-lirio-aurora overflow-x-hidden">
+      <body className="min-h-full flex flex-col font-sans bg-[#FAD4D5] dark:bg-[#3A2B2E] overflow-x-hidden">
         <Header />
         <main className="flex-grow w-full overflow-hidden relative">{children}</main>
       </body>
