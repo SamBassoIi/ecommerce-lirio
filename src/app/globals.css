@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-lirio-primary: #E5989B;
+  --color-lirio-aurora: #FAD4D5;
+  --color-lirio-peach: #F8C6C8;
+  --color-lirio-light: #FFF1F2;
+  --color-lirio-text: #4A3B3E;
+  --color-lirio-cream: #F9F6F0;
+  --color-lirio-emerald: #097969;
+  --color-lirio-amethyst: #9966CC;
+  --color-lirio-gold: #D4AF37;
+  --color-lirio-copper: #B87333;
+
+  /* Admin / Painel Gestor */
+  --color-brand-charcoal: #2D2D2D;
+  --color-brand-white: #FFFFFF;
+  --color-brand-rose: #E5989B;
+  --color-text-muted: #9CA3AF;
+  --color-gold: #D4AF37;
+  --color-silver: #C0C0C0;
+
+  --font-serif: var(--font-cormorant), "Cormorant Garamond", serif;
+  --font-cursive: var(--font-alex-brush), "Alex Brush", cursive;
+  --font-sans: var(--font-montserrat), "Montserrat", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ─── Base ───────────────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: var(--color-lirio-light);
+  color: var(--color-lirio-text);
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
+
+/* ─── Dark Mode Overrides ────────────────────────────────────────────────── */
+.dark {
+  --color-lirio-primary: #D47A7E;
+  --color-lirio-aurora: #3A2B2E;
+  --color-lirio-peach: #2E1B1D; 
+  --color-lirio-light: #180F11;
+  --color-lirio-text: #FDE8E9;
+  --color-lirio-cream: #221A1C;
+}
+
+/* ─── Background Fixo ────────────────────────────────────────────────────── */
+.shader-bg {
+  background-color: var(--color-lirio-peach);
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -10;
+  transition: background-color 0.5s ease;
+}
+
+/* ─── Glassmorphism ──────────────────────────────────────────────────────── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(229, 152, 155, 0.2);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 24px;
+  box-shadow: 0 4px 24px 0 rgba(229, 152, 155, 0.15);
+  transition: all 0.4s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 12px 40px 0 rgba(229, 152, 155, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* ─── Chart Container ────────────────────────────────────────────────────── */
+.chart-container {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  height: 40vh;
+  max-height: 350px;
+  min-height: 250px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ─── Animações ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+/* ─── Scrollbar Customizado ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #FAD4D5; }
+::-webkit-scrollbar-thumb { background: #E5989B; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4A3B3E; }
