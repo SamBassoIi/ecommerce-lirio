@@ -57,7 +57,7 @@ export function Header() {
   return (
     <header
       className={`fixed top-0 w-full p-6 flex justify-between items-center z-50 transition-all duration-300 ${
-        scrolled ? "bg-white/10 backdrop-blur-md shadow-sm" : ""
+        scrolled ? "bg-white/70 dark:bg-black/70 backdrop-blur-xl shadow-sm" : ""
       }`}
     >
       {/* Logo Cursiva */}
@@ -111,7 +111,11 @@ export function Header() {
           aria-label={`Sacola de compras, ${totalItems} ${totalItems === 1 ? "item" : "itens"}`}
           title="Sacola"
         >
-          🛍
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
           {totalItems > 0 && (
             <span className="absolute -top-1 -right-1 bg-lirio-primary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
               {totalItems}

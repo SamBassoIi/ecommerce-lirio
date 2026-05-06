@@ -209,12 +209,12 @@ export default function AdminLayout({
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-brand-white dark:bg-[#1A1A1A] border-t border-gray-100 dark:border-gray-800 shadow-lg z-50 flex justify-around items-center px-1 py-1 safe-area-bottom">
-        {navItems.slice(0, 5).map((item) => (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-brand-white dark:bg-[#1A1A1A] border-t border-gray-100 dark:border-gray-800 shadow-lg z-50 flex overflow-x-auto items-center px-2 py-1 safe-area-bottom pb-4" style={{ scrollbarWidth: 'none' }}>
+        {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg flex-1 transition-colors ${
+            className={`flex flex-col items-center justify-center py-2 px-3 rounded-lg min-w-[72px] transition-colors flex-shrink-0 ${
               isActive(item.href)
                 ? "text-brand-rose"
                 : "text-gray-400"
