@@ -8,7 +8,7 @@ import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 
-const WHATSAPP_NUMBER = "11990102767"; // Substituir pelo número real
+const WHATSAPP_NUMBER = "5511913110931";
 
 export default function SacolaPage() {
   const { items, removeItem, clearCart } = useCartStore();
