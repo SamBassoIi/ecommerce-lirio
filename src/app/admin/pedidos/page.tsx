@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 
 interface Produto {
   id: string;
@@ -70,14 +70,20 @@ export default function PedidosPage() {
   const downloadReceipt = async () => {
     if (!reciboRef.current || !reciboData) return;
     try {
-      const canvas = await html2canvas(reciboRef.current, { scale: 2 });
-      const dataUrl = canvas.toDataURL("image/png");
+      const dataUrl = await toPng(reciboRef.current, { 
+        cacheBust: true, 
+        pixelRatio: 2,
+        backgroundColor: '#ffffff'
+      });
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = `recibo-${reciboData.clienteNome.replace(/\s+/g, "_")}-${reciboData.id.slice(0, 5)}.png`;
+      document.body.appendChild(link); // Required for Firefox
       link.click();
+      document.body.removeChild(link);
     } catch (error) {
       console.error("Erro ao gerar imagem do recibo:", error);
+      alert("Houve um erro ao gerar a imagem. Tente novamente.");
     }
   };
 
