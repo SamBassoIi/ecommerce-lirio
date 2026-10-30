@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛍️ Lírio Branco — E-commerce & Painel Gestor ERP Full-Stack
 
-## Getting Started
+![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 
-First, run the development server:
+Plataforma completa de **E-commerce e Backoffice Administrativo (ERP)** desenvolvida com **Next.js (App Router)**, **TypeScript**, **Tailwind CSS v4**, **Zustand**, **Framer Motion** e **Google Firebase** (*Firestore, Authentication e Cloud Storage*).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+O sistema conecta a vitrine pública de semijoias e acessórios em tempo real ao painel administrativo interno de estoque, precificação, pedidos, clientes e fluxo financeiro.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+![Vitrine Lírio Branco E-commerce](docs/preview.png)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ✨ Principais Funcionalidades
 
-## Learn More
+### 🌸 Vitrine Pública (Storefront)
+- **Catálogo Dinâmico em Tempo Real:** Listagem sincronizada com o Cloud Firestore, busca textual instantânea e filtragem combinada por material (*Dourado* / *Prata*) e categoria (*Conjuntos*, *Colares*, *Pulseiras*, *Brincos*, *Anéis*).
+- **Página de Detalhes do Produto (`/produto/[id]`):** Galeria de fotos, especificações de banho/material e validação de disponibilidade de saldo.
+- **Sacola Persistente com Zustand (`/sacola`):** Gerenciamento reativo de itens com persistência local, registro estruturado do pedido no Firestore e redirecionamento automatizado para fechamento via WhatsApp.
+- **Design System Autoral & Dark Mode:** Identidade visual em estética *glassmorphism*, tipografia editorial (*Cormorant Garamond*, *Alex Brush* e *Montserrat*) e animações fluidas com **Framer Motion** e **Lottie**.
 
-To learn more about Next.js, take a look at the following resources:
+### 📊 Painel Gestor / Backoffice (`/admin/*`)
+- **Autenticação Administrativa:** Rotas protegidas via **Firebase Authentication** e regras de acesso baseadas em função (`firestore.rules`).
+- **Visão Geral & KPIs (`/admin/visao-geral`):** Métricas consolidadas de faturamento, ticket médio, peças em estoque e desempenho comercial.
+- **Gestão de Produtos & Custos (`/admin`, `/admin/custos`):** Cadastro completo com upload de múltiplas imagens para o Firebase Storage, controle de saldo e cálculo de margem sobre custo de aquisição.
+- **Gestão de Pedidos & CRM de Clientes (`/admin/pedidos`, `/admin/clientes`):** Acompanhamento de pedidos recebidos pela vitrine, baixa automática de estoque e histórico de clientes.
+- **Controle Financeiro & Curadoria Social (`/admin/financeiro`, `/admin/instagram`):** Lançamento de receitas/despesas operacionais e gerenciamento dos posts em destaque do Instagram na página inicial.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🏗️ Arquitetura e Stack Tecnológica
 
-## Deploy on Vercel
+| Camada | Tecnologias |
+| :--- | :--- |
+| **Framework & UI** | Next.js 16 (App Router), React 19, TypeScript 5 |
+| **Estilização & Motion** | Tailwind CSS v4, Framer Motion, Lottie React |
+| **Gerenciamento de Estado** | Zustand (`useCartStore`) |
+| **Backend-as-a-Service** | Firebase Firestore, Firebase Auth, Firebase Storage |
+| **Segurança de Dados** | Firestore Security Rules (`firestore.rules`) com RBAC Admin e isolamento de PII (LGPD) |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🚀 Como Executar Localmente
+
+1. **Clone o repositório e instale as dependências:**
+   ```bash
+   git clone https://github.com/SamBassoIi/ecommerce-lirio.git
+   cd ecommerce-lirio
+   npm install
+   ```
+
+2. **Configure as variáveis de ambiente:**
+   Copie o arquivo `.env.example` para `.env.local` e preencha com as credenciais do seu projeto Firebase:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+3. **Inicie o servidor de desenvolvimento:**
+   ```bash
+   npm run dev
+   ```
+   Acesse `http://localhost:3000` para visualizar a vitrine e `http://localhost:3000/admin` para acessar o Painel Gestor.

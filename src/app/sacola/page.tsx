@@ -35,24 +35,36 @@ export default function SacolaPage() {
       const nomeCliente = nome.trim();
       const telefoneCliente = telefone.trim();
 
-      // 1. Registra/atualiza cliente na coleção "clientes"
-      // O app mobile espera os campos: nome, tel, obs
+      // 1. Registra/atualiza cliente na coleção "clientes" de forma isolada
+      // (compatível com regras Firestore write-only que protegem PII contra listagem pública)
       const clientesRef = collection(db, "clientes");
-      const clienteQuery = query(clientesRef, where("tel", "==", telefoneCliente));
-      const clienteSnap = await getDocs(clienteQuery);
+      try {
+        const clienteQuery = query(clientesRef, where("tel", "==", telefoneCliente));
+        const clienteSnap = await getDocs(clienteQuery);
 
-      if (clienteSnap.empty) {
-        await addDoc(clientesRef, {
-          nome: nomeCliente,
-          tel: telefoneCliente,
-          obs: "",
-        });
-      } else {
-        const { updateDoc, doc: docRef } = await import("firebase/firestore");
-        const clienteDoc = clienteSnap.docs[0];
-        await updateDoc(docRef(db, "clientes", clienteDoc.id), {
-          nome: nomeCliente,
-        });
+        if (clienteSnap.empty) {
+          await addDoc(clientesRef, {
+            nome: nomeCliente,
+            tel: telefoneCliente,
+            obs: "",
+          });
+        } else {
+          const { updateDoc, doc: docRef } = await import("firebase/firestore");
+          const clienteDoc = clienteSnap.docs[0];
+          await updateDoc(docRef(db, "clientes", clienteDoc.id), {
+            nome: nomeCliente,
+          });
+        }
+      } catch {
+        try {
+          await addDoc(clientesRef, {
+            nome: nomeCliente,
+            tel: telefoneCliente,
+            obs: "",
+          });
+        } catch {
+          // Prossegue normalmente para registrar o pedido
+        }
       }
 
       // 2. Salva pedido com a estrutura exata que o app mobile lê

@@ -1,0 +1,394 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Project: Lírio Branco E-Commerce (liriobranco-c737f)
+//
+// This security rules file assumes the following data structures:
+//
+// 1. Collection: admins
+//    Document ID: {adminUid} (Firebase Auth UID of store administrator)
+//    Access: Provisioned exclusively via Firebase Console / Admin SDK (client writes denied).
+//            Alternatively, admins may be authorized via Auth custom claims (`admin == true` or `role == 'admin'`).
+//    Fields: (marker document; client writes are completely disabled)
+//
+// 2. Collection: produtos
+//    Document ID: {produtoId} (auto-generated)
+//    Access: Publicly readable for storefront catalog (`/` and `/produto/[id]`);
+//            create, update, delete restricted strictly to administrators.
+//    Fields:
+//      - nome: string (required, 1..200 chars) - Jewelry product title
+//      - preco: number (required, 0..1000000) - Unit sale price in BRL
+//      - qtd: int (required, 0..100000) - Available inventory count
+//      - imagens: list<string> (optional, 0..15 items, each valid http/https URL <= 2048 chars) - Product photo URLs
+//      - material: string (optional, enum: 'Dourado' | 'Prata') - Jewelry finish/material
+//      - categoria: string (optional, 1..80 chars) - Product category (e.g., Colar, Brinco, Anel, Pulseira, Conjuntos)
+//      - descricao: string (optional, 0..2000 chars) - Product description shown on detail page
+//      - custo: number (optional, 0..1000000) - Unit shelf cost managed in /admin/custos
+//      - createdAt: timestamp | int (optional, immutable on update) - Creation timestamp
+//      - updatedAt: timestamp | int (optional) - Last modification timestamp
+//      - timestamp: timestamp | int (optional, immutable on update) - Legacy/mobile creation timestamp
+//
+// 3. Collection: instagram_posts
+//    Document ID: {postId} (auto-generated)
+//    Access: Publicly readable for homepage Instagram feed (`orderBy('createdAt', 'desc'), limit(6)`);
+//            create, update, delete restricted strictly to administrators.
+//    Fields:
+//      - url: string (required, 20..500 chars, valid Instagram /p/ or /reel/ URL) - Instagram post permalink
+//      - createdAt: timestamp (required, must equal request.time on create, immutable on update) - Creation server timestamp
+//
+// 4. Collection: clientes
+//    Document ID: {clienteId} (auto-generated)
+//    Access: Contains PII (customer name, phone number, private admin notes).
+//            Read, update, and delete are strictly restricted to administrators (`isAdmin()`).
+//            Write-only creation is allowed for admins or validated storefront checkout leads (`obs == ""`).
+//            NOTE: Public `list`/`update` on `clientes` is intentionally denied to prevent PII scraping and
+//            unauthorized customer record tampering.
+//    Fields:
+//      - nome: string (required, 1..120 chars; >= 2 chars for public lead creation) - Customer full name
+//      - tel: string (required, 0..30 chars for admin; 8..30 chars phone format for public lead creation) - Phone number
+//      - obs: string (required, 0..1000 chars for admin; must be "" for public lead creation) - Internal admin notes
+//
+// 5. Collection: pedidos
+//    Document ID: {pedidoId} (auto-generated)
+//    Access: Contains customer names and sales records.
+//            Read, update, and delete are strictly restricted to administrators (`isAdmin()`).
+//            Write-only creation (`create`) is allowed for storefront WhatsApp checkout (`/sacola`) and admins,
+//            subject to strict schema, item-level array validation, non-negative bounds, and timestamp recency.
+//    Fields:
+//      - clienteNome: string (required, 1..120 chars) - Customer name on the order
+//      - data: string (required, 8..10 chars, pt-BR date format DD/MM/YYYY, immutable on update) - Display date
+//      - itens: list<map> (required, 1..20 items) - Ordered line items, each strictly containing:
+//          * id: string (required, 1..128 chars) - Product ID
+//          * nome: string (required, 1..200 chars) - Product name snapshot
+//          * preco: number (required, 0..1000000) - Unit price snapshot
+//          * qtdPedida: int (required, 1..1000) - Ordered quantity
+//      - total: number (required, 0..10000000) - Total order value in BRL
+//      - timestamp: int (required, epoch ms within +/-24h of request.time on create, immutable on update)
+//
+// 6. Collection: despesas
+//    Document ID: {despesaId} (auto-generated)
+//    Access: Internal financial expenses (`/admin/financeiro`). Strictly restricted to administrators (`isAdmin()`).
+//    Fields:
+//      - data: string (required, 8..10 chars, pt-BR date format DD/MM/YYYY, immutable on update) - Expense date
+//      - desc: string (required, 1..300 chars) - Expense description
+//      - valor: number (required, > 0 and <= 10000000) - Expense amount in BRL
+//      - timestamp: int (required, epoch ms within +/-24h of request.time on create, immutable on update)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated via Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user matches a specific userId
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if the authenticated user owns the existing document via its uid field
+    function isDocOwner() {
+      return isAuthenticated() && 'uid' in resource.data && request.auth.uid == resource.data.uid;
+    }
+
+    // Verify uid field hasn't been spoofed on create
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        ('uid' in resource.data && request.resource.data.uid == resource.data.uid);
+    }
+
+    // Verify store administrator authority from trusted sources ONLY:
+    // 1. Custom claims (`admin: true` or `role: 'admin'`) on the Firebase Auth token, OR
+    // 2. Presence of an out-of-band Console/Admin-SDK marker document at `/admins/{uid}`.
+    function isAdmin() {
+      return isAuthenticated() && (
+        ('admin' in request.auth.token && request.auth.token.admin is bool && request.auth.token.admin == true) ||
+        ('role' in request.auth.token && request.auth.token.role is string && request.auth.token.role == 'admin') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validate that all required fields exist on the incoming document
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that the incoming document contains ONLY allowed fields (prevents schema pollution)
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that immutable fields have not been added, removed, or modified during an update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Strict CEL numeric check (accepts both 64-bit int and IEEE-754 float)
+    function isNumber(val) {
+      return val is int || val is float;
+    }
+
+    // Validate bounded HTTP/HTTPS URL string
+    function isValidUrl(url) {
+      return url is string &&
+        url.size() >= 10 &&
+        url.size() <= 2048 &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    // Validate Instagram post or reel URL format
+    function isValidInstagramUrl(url) {
+      return url is string &&
+        url.size() >= 20 &&
+        url.size() <= 500 &&
+        url.matches("^https?://(www\\.)?instagram\\.com/(p|reel)/[A-Za-z0-9_-]+([/?#].*)?$");
+    }
+
+    // Validate pt-BR date string (DD/MM/YYYY or D/M/YYYY from toLocaleDateString('pt-BR'))
+    function isValidPtBrDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.size() >= 8 &&
+        dateStr.size() <= 10 &&
+        dateStr.matches("^\\d{1,2}/\\d{1,2}/\\d{4}$");
+    }
+
+    // Validate list type and maximum element count
+    function isValidList(listVal, maxSize) {
+      return listVal is list && listVal.size() <= maxSize;
+    }
+
+    // Validate optional timestamp or positive epoch-millisecond integer
+    function isValidTimestampOrMillis(val) {
+      return val is timestamp || (val is int && val > 0);
+    }
+
+    // Validate client-generated Date.now() epoch ms is within +/- 24 hours of server request.time
+    // (prevents far-past / far-future sorting manipulation while tolerating minor client clock skew)
+    function isRecentEpochMillis(ts) {
+      return ts is int &&
+        ts >= (request.time - duration.value(24, 'h')).toMillis() &&
+        ts <= (request.time + duration.value(24, 'h')).toMillis();
+    }
+
+    // Deep inspection for product image URL lists (max 15 URLs, every element validated)
+    function isValidProductImages(images) {
+      return isValidList(images, 15) &&
+        (images.size() <= 0 || isValidUrl(images[0])) &&
+        (images.size() <= 1 || isValidUrl(images[1])) &&
+        (images.size() <= 2 || isValidUrl(images[2])) &&
+        (images.size() <= 3 || isValidUrl(images[3])) &&
+        (images.size() <= 4 || isValidUrl(images[4])) &&
+        (images.size() <= 5 || isValidUrl(images[5])) &&
+        (images.size() <= 6 || isValidUrl(images[6])) &&
+        (images.size() <= 7 || isValidUrl(images[7])) &&
+        (images.size() <= 8 || isValidUrl(images[8])) &&
+        (images.size() <= 9 || isValidUrl(images[9])) &&
+        (images.size() <= 10 || isValidUrl(images[10])) &&
+        (images.size() <= 11 || isValidUrl(images[11])) &&
+        (images.size() <= 12 || isValidUrl(images[12])) &&
+        (images.size() <= 13 || isValidUrl(images[13])) &&
+        (images.size() <= 14 || isValidUrl(images[14]));
+    }
+
+    // Validate a single order line item map inside `pedidos.itens`
+    function isValidPedidoItem(item) {
+      return item is map &&
+        item.keys().hasAll(['id', 'nome', 'preco', 'qtdPedida']) &&
+        item.keys().hasOnly(['id', 'nome', 'preco', 'qtdPedida']) &&
+        item.id is string && item.id.size() >= 1 && item.id.size() <= 128 &&
+        item.nome is string && item.nome.size() >= 1 && item.nome.size() <= 200 &&
+        isNumber(item.preco) && item.preco >= 0 && item.preco <= 1000000 &&
+        item.qtdPedida is int && item.qtdPedida >= 1 && item.qtdPedida <= 1000;
+    }
+
+    // Deep inspection for `pedidos.itens` list (1..20 line items, every element validated)
+    function isValidPedidoItemsList(items) {
+      return isValidList(items, 20) &&
+        items.size() >= 1 &&
+        (items.size() <= 0 || isValidPedidoItem(items[0])) &&
+        (items.size() <= 1 || isValidPedidoItem(items[1])) &&
+        (items.size() <= 2 || isValidPedidoItem(items[2])) &&
+        (items.size() <= 3 || isValidPedidoItem(items[3])) &&
+        (items.size() <= 4 || isValidPedidoItem(items[4])) &&
+        (items.size() <= 5 || isValidPedidoItem(items[5])) &&
+        (items.size() <= 6 || isValidPedidoItem(items[6])) &&
+        (items.size() <= 7 || isValidPedidoItem(items[7])) &&
+        (items.size() <= 8 || isValidPedidoItem(items[8])) &&
+        (items.size() <= 9 || isValidPedidoItem(items[9])) &&
+        (items.size() <= 10 || isValidPedidoItem(items[10])) &&
+        (items.size() <= 11 || isValidPedidoItem(items[11])) &&
+        (items.size() <= 12 || isValidPedidoItem(items[12])) &&
+        (items.size() <= 13 || isValidPedidoItem(items[13])) &&
+        (items.size() <= 14 || isValidPedidoItem(items[14])) &&
+        (items.size() <= 15 || isValidPedidoItem(items[15])) &&
+        (items.size() <= 16 || isValidPedidoItem(items[16])) &&
+        (items.size() <= 17 || isValidPedidoItem(items[17])) &&
+        (items.size() <= 18 || isValidPedidoItem(items[18])) &&
+        (items.size() <= 19 || isValidPedidoItem(items[19]));
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update rules)
+    // ===============================================================
+
+    function isValidProduto(data) {
+      return hasRequiredFields(['nome', 'preco', 'qtd']) &&
+        hasOnlyAllowedFields([
+          'nome',
+          'preco',
+          'qtd',
+          'imagens',
+          'material',
+          'categoria',
+          'descricao',
+          'custo',
+          'createdAt',
+          'updatedAt',
+          'timestamp'
+        ]) &&
+        data.nome is string && data.nome.size() >= 1 && data.nome.size() <= 200 &&
+        isNumber(data.preco) && data.preco >= 0 && data.preco <= 1000000 &&
+        data.qtd is int && data.qtd >= 0 && data.qtd <= 100000 &&
+        (!('imagens' in data) || isValidProductImages(data.imagens)) &&
+        (!('material' in data) || (data.material is string && data.material in ['Dourado', 'Prata'])) &&
+        (!('categoria' in data) || (data.categoria is string && data.categoria.size() >= 1 && data.categoria.size() <= 80)) &&
+        (!('descricao' in data) || (data.descricao is string && data.descricao.size() >= 0 && data.descricao.size() <= 2000)) &&
+        (!('custo' in data) || (isNumber(data.custo) && data.custo >= 0 && data.custo <= 1000000)) &&
+        (!('createdAt' in data) || isValidTimestampOrMillis(data.createdAt)) &&
+        (!('updatedAt' in data) || isValidTimestampOrMillis(data.updatedAt)) &&
+        (!('timestamp' in data) || isValidTimestampOrMillis(data.timestamp));
+    }
+
+    function isValidInstagramPost(data) {
+      return hasRequiredFields(['url', 'createdAt']) &&
+        hasOnlyAllowedFields(['url', 'createdAt']) &&
+        isValidInstagramUrl(data.url) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCliente(data) {
+      return hasRequiredFields(['nome', 'tel', 'obs']) &&
+        hasOnlyAllowedFields(['nome', 'tel', 'obs']) &&
+        data.nome is string && data.nome.size() >= 1 && data.nome.size() <= 120 &&
+        data.tel is string && data.tel.size() >= 0 && data.tel.size() <= 30 &&
+        (data.tel.size() == 0 || (data.tel.matches("^[0-9+() .-]{8,30}$") && data.tel.matches(".*[0-9].*"))) &&
+        data.obs is string && data.obs.size() >= 0 && data.obs.size() <= 1000;
+    }
+
+    function isValidPublicCliente(data) {
+      return isValidCliente(data) &&
+        data.nome.size() >= 2 &&
+        data.tel.size() >= 8 &&
+        data.obs == "";
+    }
+
+    function isValidPedido(data) {
+      return hasRequiredFields(['clienteNome', 'data', 'itens', 'total', 'timestamp']) &&
+        hasOnlyAllowedFields(['clienteNome', 'data', 'itens', 'total', 'timestamp']) &&
+        data.clienteNome is string && data.clienteNome.size() >= 1 && data.clienteNome.size() <= 120 &&
+        isValidPtBrDateString(data.data) &&
+        isValidPedidoItemsList(data.itens) &&
+        isNumber(data.total) && data.total >= 0 && data.total <= 10000000 &&
+        data.timestamp is int && data.timestamp > 0;
+    }
+
+    function isValidDespesa(data) {
+      return hasRequiredFields(['data', 'desc', 'valor', 'timestamp']) &&
+        hasOnlyAllowedFields(['data', 'desc', 'valor', 'timestamp']) &&
+        isValidPtBrDateString(data.data) &&
+        data.desc is string && data.desc.size() >= 1 && data.desc.size() <= 300 &&
+        isNumber(data.valor) && data.valor > 0 && data.valor <= 10000000 &&
+        data.timestamp is int && data.timestamp > 0;
+    }
+
+    // ===============================================================
+    // Collection Security Rules
+    // ===============================================================
+
+    // Admin allowlist collection (managed strictly via Firebase Console / Admin SDK)
+    match /admins/{adminUid} {
+      allow get: if isOwner(adminUid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Storefront Jewelry Catalog (/ and /produto/[id]) & Admin Stock/Costs (/admin, /admin/custos)
+    match /produtos/{produtoId} {
+      allow read: if true;
+      allow create: if isAdmin() &&
+        uidUnchanged() &&
+        isValidProduto(request.resource.data);
+      allow update: if isAdmin() &&
+        uidNotModified() &&
+        isValidProduto(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt', 'timestamp']);
+      allow delete: if isAdmin();
+    }
+
+    // Homepage Instagram Feed (/) & Admin Feed Management (/admin/instagram)
+    match /instagram_posts/{postId} {
+      allow read: if true;
+      allow create: if isAdmin() &&
+        isValidInstagramPost(request.resource.data) &&
+        request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() &&
+        isValidInstagramPost(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    // Customer Directory (/admin/clientes) & Write-Only Storefront Checkout Lead Registration
+    match /clientes/{clienteId} {
+      allow read: if isAdmin();
+      allow create: if (isAdmin() && isValidCliente(request.resource.data)) ||
+        isValidPublicCliente(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidCliente(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Orders (/sacola write-only checkout & /admin/pedidos, /admin/financeiro, /admin/visao-geral)
+    match /pedidos/{pedidoId} {
+      allow read: if isAdmin();
+      allow create: if isValidPedido(request.resource.data) &&
+        isRecentEpochMillis(request.resource.data.timestamp);
+      allow update: if isAdmin() &&
+        isValidPedido(request.resource.data) &&
+        areImmutableFieldsUnchanged(['timestamp', 'data']);
+      allow delete: if isAdmin();
+    }
+
+    // Operational Expenses (/admin/financeiro)
+    match /despesas/{despesaId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() &&
+        isValidDespesa(request.resource.data) &&
+        isRecentEpochMillis(request.resource.data.timestamp);
+      allow update: if isAdmin() &&
+        isValidDespesa(request.resource.data) &&
+        areImmutableFieldsUnchanged(['timestamp', 'data']);
+      allow delete: if isAdmin();
+    }
+
+    // Default Deny for all unmatched collections and subcollections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
